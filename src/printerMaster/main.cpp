@@ -26,7 +26,7 @@ void scanForDevices() {
    pScan->setWindow(999);
 
    Serial.println("   starting scan...");
-   if (pScan->start(998, true)) {
+   if (pScan->start(2002, false, true)) {
       Serial.println("   scan started successfully. Processing results...");
       NimBLEScanResults results = pScan->getResults(); 
       Serial.printf("   --- devices found: %d\n", results.getCount());
@@ -34,7 +34,6 @@ void scanForDevices() {
       devicesFound = results.getCount();
       for (int i = 0; i < results.getCount(); i++) {
          const NimBLEAdvertisedDevice* device = results.getDevice(i); 
-
          Serial.printf("      device %s: %s (RSSI: %d)\n", device->getName().c_str(), device->getAddress().toString().c_str(), device->getRSSI());
       }
    } else {
@@ -42,29 +41,36 @@ void scanForDevices() {
    }
 }
 
-void connectToPrinter() {
-   Serial.println("Scanning for Q30...");
+void startScan() {
+   NimBLEDevice::init("ESP32_C3_Labeler");
+   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
    NimBLEScan* pScan = NimBLEDevice::getScan();
+   if (pScan->isScanning()) {
+      Serial.println("Already scanning, skipping new scan.");
+      return;
+   }
    pScan->setActiveScan(true);
-   pScan->setInterval(100);
-   pScan->setWindow(99);
+   pScan->setInterval(2000);
+   pScan->setWindow(1999);
+   Serial.println("   starting scan...");
+   if (pScan->start(20002, false, true)) {
+      Serial.println("   scan started successfully. Processing results...");
+   } else {
+      Serial.println("   scan failed to start.");
+   }
+}
 
-   // start() now returns true/false, not the results
-   Serial.println("Starting scan...");
-   if (pScan->start(5)) {
-      Serial.println("Scan started successfully. Processing results...");
-      // After the scan finishes, we get the results from the Scan object
+void connectToPrinter() {
+      NimBLEScan* pScan = NimBLEDevice::getScan();
       NimBLEScanResults results = pScan->getResults(); 
       Serial.printf("   devices found: %d\n", results.getCount());
 
       for (int i = 0; i < results.getCount(); i++) {
-         // Add 'const' here to match what getDevice returns
          const NimBLEAdvertisedDevice* device = results.getDevice(i); 
-
          Serial.printf("      device %s: %s (RSSI: %d)\n", device->getName().c_str(), device->getAddress().toString().c_str(), device->getRSSI());
 
          if (device->getName() == "Q30") {
-            Serial.print("Target Found: ");
+            Serial.print("          PRINTER found: ");
             Serial.println(device->getAddress().toString().c_str());
 
             pClient = NimBLEDevice::createClient();
@@ -102,9 +108,6 @@ void connectToPrinter() {
             }
          }
       }
-   } else {
-      Serial.println("Scan failed to start.");
-   }
 }
 
 void printLabel(const char* text) {
@@ -556,36 +559,22 @@ void connectToAddress() {
 }
 
 void setup() {
-   // delay(888);
    Serial.begin(115200);
-   delay(1000);
-   Serial.println("Setting up printer...");
-   // NimBLEDevice::init("ESP32_C3_Labeler");
-   // connectToPrinter();
-   Serial.println("Should be ready to print!");
-   // printLabel("HELLO");
+   delay(2002);
+   startScan();
 }
 
 void loop() {
    delay(888);
    counter++;
-   Serial.printf("Counter: %d, devices found: %d\n", counter, devicesFound);
-   if (counter == 8) {
-      NimBLEDevice::init("ESP32_C3_Labeler");
-      NimBLEDevice::setPower(ESP_PWR_LVL_P9);
-      Serial.println("INITED BLE DEVICE");
+   if (pRemoteChar) {
+      Serial.printf("Should be ready to print, counter: %d\n", counter);
+      if (counter == 8) {
+         Serial.println("   sending label...");
+         printLabel3("HELLO");
+      }
+   } else {
+      Serial.println("Not connected to printer yet, trying again...");
+      connectToPrinter();
    }
-   if (counter > 13 && devicesFound == 0) {
-      scanForDevices();
-   }
-   if (counter == 22) {
-      connectToAddress();
-   }
-   // if (counter == 22) {
-   //    NimBLEDevice::init("ESP32_C3_Labeler");
-   //    Serial.println("Attempting to connect to printer...");
-   //    connectToPrinter();
-   //    Serial.println("Should be ready to print!");
-   //    printLabel("HELLO");
-   // }
 }
