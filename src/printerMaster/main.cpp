@@ -111,7 +111,10 @@ void connectToPrinter() {
 }
 
 void printLabel(const char* text) {
-   if (!pRemoteChar) return;
+   if (!pRemoteChar) {
+      Serial.println("--- Characteristic not found, cannot print.");
+      return;
+   }
 
    // 1. Prepare the ESC/POS Header (Found in the polskafan repo logic)
    // Format: GS v 0 m xL xH yL yH
@@ -151,6 +154,10 @@ void printLabel2(const char* text) {
 // void printLabel3(const char* text) {
 //     if (!pRemoteChar) return;
 
+//    const int CANVAS_WIDTH = 96;
+//    const int CANVAS_HEIGHT = 64;
+//    GFXcanvas1 canvas(CANVAS_WIDTH, CANVAS_HEIGHT);
+
 //     // 1. Draw on the Canvas
 //     canvas.fillScreen(0);               // Clear canvas (0 = white)
 //     canvas.setCursor(0, 10);            // Move "pen" to x=0, y=10
@@ -186,23 +193,24 @@ void printLabel2(const char* text) {
 //     Serial.println(">>> Label printed!");
 // }
 
+// most working, but label is only 1/3 of the widht
 void printLabel3(const char* text) {
    if (!pRemoteChar) return;
 
    // D30/Q30 Width is 96 pixels. 
    // Height can be whatever you want, let's stick to 64 for a small label.
-   const int CANVAS_WIDTH = 32;
-   const int CANVAS_HEIGHT = 240;
+   const int CANVAS_WIDTH = 96;
+   const int CANVAS_HEIGHT = 64;
 
    // Create the virtual canvas
    GFXcanvas1 canvas(CANVAS_WIDTH, CANVAS_HEIGHT);
 
    // 1. Draw "HELLO" onto the canvas
    canvas.fillScreen(1);               // White background
-   canvas.setRotation(1);             // Landscape mode
-   canvas.setCursor(25, 20);            // Padding to avoid the edge
+   canvas.setRotation(0);             // Landscape mode
+   canvas.setCursor(5, 10);            // Padding to avoid the edge
    canvas.setTextColor(0);             // Black text
-   canvas.setTextSize(3);
+   canvas.setTextSize(2);
    canvas.print(text);
 
    // 2. Protocol Initialization
@@ -240,6 +248,49 @@ uint8_t reverse(uint8_t b) {
 }
 
 
+// empty label
+void printLabel4(const char* text) {
+    if (!pRemoteChar) return;
+
+    // D30/Q30 Width is 96 pixels. 
+      // Height can be whatever you want, let's stick to 64 for a small label.
+      const int CANVAS_WIDTH = 96;
+      const int CANVAS_HEIGHT = 200;
+
+      // Create the virtual canvas
+      GFXcanvas1 canvas(CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Draw
+    canvas.fillScreen(1);
+    canvas.setTextColor(0);
+   //  canvas.setRotation(1);
+    canvas.setTextSize(8);
+    canvas.setCursor(20, 30);
+    canvas.print(text);
+
+    // 1. Wake up
+    uint8_t start[] = {0x1f, 0x11, 0x11};
+    pRemoteChar->writeValue(start, sizeof(start), true);
+    delay(20);
+
+    // 2. Header (Height set to 240)
+    uint8_t header[] = {0x1d, 0x76, 0x30, 0x00, 0x0c, 0x00, 0xf0, 0x00};
+    pRemoteChar->writeValue(header, sizeof(header), true);
+    delay(88);
+
+    // 3. Data Chunks
+    uint8_t* buf = canvas.getBuffer();
+    for (size_t i = 0; i < (96 * 240 / 8); i += 20) {
+        pRemoteChar->writeValue(buf + i, min((size_t)20, (96 * 240 / 8) - i), true);
+        delay(2); 
+    }
+
+    // 4. THE FIX: End Data and Auto-Gap Feed
+    uint8_t finish[] = {0x1f, 0x11, 0x12, 0x1b, 0x64, 0x01}; 
+    pRemoteChar->writeValue(finish, sizeof(finish), true);
+    Serial.println(">>> Label sent to Q30!");
+}
+
 // empty labels
 void printLabel5(const char* text) {
    if (!pRemoteChar) return;
@@ -274,7 +325,7 @@ void printLabel5(const char* text) {
 
    for (size_t i = 0; i < totalLen; i++) {
       // REVERSE THE BIT ORDER HERE
-      // chunk[chunkIdx++] = reverse(buf[i]);
+      chunk[chunkIdx++] = reverse(buf[i]);
       chunk[chunkIdx++] = 0xFF;
 
       if (chunkIdx == 20 || i == totalLen - 1) {
