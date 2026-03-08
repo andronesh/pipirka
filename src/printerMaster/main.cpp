@@ -1,45 +1,13 @@
 #include <NimBLEDevice.h>
 #include <Adafruit_GFX.h>
 
-// Printer UUIDs
-static const char* SERVICE_UUID = "ff00"; 
-static const char* CHAR_UUID    = "ff02";
-
 NimBLEClient* pClient;
 NimBLERemoteCharacteristic* pRemoteChar;
 
-// D30 Print Buffer (96 pixels wide / 8 bits per byte = 12 bytes per row)
-const int width = 96;
-const int height = 64; 
-uint8_t bitmap[12 * height];
-
 int counter = 0;
 int devicesFound = 0;
-// NimBLEAdvertisedDevice printerDevice;
 
 const char* PRINTER_MAC = "a2:ba:cb:2f:bd:e1";
-
-void scanForDevices() {
-   NimBLEScan* pScan = NimBLEDevice::getScan();
-   pScan->setActiveScan(true);
-   pScan->setInterval(1000);
-   pScan->setWindow(999);
-
-   Serial.println("   starting scan...");
-   if (pScan->start(2002, false, true)) {
-      Serial.println("   scan started successfully. Processing results...");
-      NimBLEScanResults results = pScan->getResults(); 
-      Serial.printf("   --- devices found: %d\n", results.getCount());
-
-      devicesFound = results.getCount();
-      for (int i = 0; i < results.getCount(); i++) {
-         const NimBLEAdvertisedDevice* device = results.getDevice(i); 
-         Serial.printf("      device %s: %s (RSSI: %d)\n", device->getName().c_str(), device->getAddress().toString().c_str(), device->getRSSI());
-      }
-   } else {
-      Serial.println("Scan failed to start.");
-   }
-}
 
 void startScan() {
    NimBLEDevice::init("ESP32_C3_Labeler");
@@ -75,19 +43,6 @@ void connectToPrinter() {
 
             pClient = NimBLEDevice::createClient();
 
-            // Use the pointer directly in connect()
-            // if (pClient->connect(device)) {
-            //    Serial.println("Connected to Phomemo D30!");
-
-            //    // // Set a larger MTU to send image data faster
-            //    // pClient->setMTU(512); 
-
-            //    auto service = pClient->getService(SERVICE_UUID);
-            //    if (service) {
-            //       pRemoteChar = service->getCharacteristic(CHAR_UUID);
-            //    }
-            //    return;
-            // }
             if (pClient->connect(device)) { 
                Serial.println("Connected to Phomemo D30!");
 
@@ -115,6 +70,11 @@ void printLabel(const char* text) {
       Serial.println("--- Characteristic not found, cannot print.");
       return;
    }
+
+   // D30 Print Buffer (96 pixels wide / 8 bits per byte = 12 bytes per row)
+   const int width = 96;
+   const int height = 64; 
+   uint8_t bitmap[12 * height];
 
    // 1. Prepare the ESC/POS Header (Found in the polskafan repo logic)
    // Format: GS v 0 m xL xH yL yH
@@ -423,7 +383,6 @@ void printStripeTest() {
 }
 
 void printLabel7(const char* text) {
-
   if (!pRemoteChar) return;
 
   const int CANVAS_WIDTH  = 96;    // Q30 raster width
@@ -533,80 +492,6 @@ void printLabelPolska(const char* text) {
     pRemoteChar->writeValue(feedCmd, sizeof(feedCmd), true);
 
     Serial.println(">>> Polskafan-style label sent!");
-}
-
-void sendPhomemoPacket(uint8_t* data, uint16_t len) {
-
-  uint16_t totalLen = len + 5;
-
-  uint8_t packet[totalLen + 6];
-
-  packet[0] = 0x51;
-  packet[1] = 0x78;
-
-  packet[2] = totalLen & 0xFF;
-  packet[3] = (totalLen >> 8) & 0xFF;
-
-  packet[4] = 0x00;
-  packet[5] = 0x00;
-  packet[6] = 0xA5;
-
-  memcpy(&packet[7], data, len);
-
-  uint8_t crc = 0;
-  for (int i = 6; i < 7 + len; i++) {
-    crc ^= packet[i];
-  }
-
-  packet[7 + len] = crc;
-
-  pRemoteChar->writeValue(packet, 8 + len, true);
-}
-
-void testFeed() {
-
-  if (!pRemoteChar) return;
-
-  // Simple feed command
-  uint8_t escFeed[] = {0x1B, 0x4A, 0x60};
-
-  sendPhomemoPacket(escFeed, sizeof(escFeed));
-
-  Serial.println("Feed test sent");
-}
-
-void connectToAddress() {
-    Serial.println("Attempting manual connection...");
-
-    // 1. Create a NimBLEAddress object (Address type 1 is common for BLE printers)
-   //  NimBLEAddress printerAddr(PRINTER_MAC, 1); 
-    NimBLEAddress printerAddr(PRINTER_MAC, 0); 
-
-    // 2. Create the client
-    pClient = NimBLEDevice::createClient();
-
-    // 3. Connect directly using the address
-    // This skips scanning and tries to open the "pipe" immediately
-    if (pClient->connect(printerAddr)) {
-        Serial.println("Success! Connected to Q30 via MAC.");
-        
-        // After connecting, find the "Print" characteristic
-        auto pService = pClient->getService("ff00");
-        if (pService) {
-            Serial.println("   Found service ff00:");
-            Serial.printf("      uuid: %s\n", pService->getUUID().toString().c_str());
-            pRemoteChar = pService->getCharacteristic("ff02");
-            if (pRemoteChar) {
-                Serial.println("   Found characteristic ff02:");
-                Serial.printf("      uuid: %s\n", pRemoteChar->getUUID().toString().c_str());
-                printLabel3("HELLO");
-               //  printStripeTest();
-               // testFeed();
-            }
-        }
-    } else {
-        Serial.println("Failed to connect. If it keeps failing, try address type 0.");
-    }
 }
 
 void setup() {
