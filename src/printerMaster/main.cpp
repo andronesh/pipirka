@@ -5,11 +5,43 @@
 
 NimBLEClient* pClient;
 NimBLERemoteCharacteristic* pRemoteChar;
+NimBLERemoteCharacteristic* notifyChar;
 
 int counter = 0;
 int devicesFound = 0;
 
 const char* PRINTER_MAC = "a2:ba:cb:2f:bd:e1";
+
+
+// doesn't trigger
+void notifyCallback(
+    BLERemoteCharacteristic* chr,
+    uint8_t* data,
+    size_t len,
+    bool isNotify)
+{
+    Serial.print("---> Printer status: ");
+
+    for (int i = 0; i < len; i++) {
+        Serial.printf("%02X ", data[i]);
+    }
+
+    Serial.println();
+}
+
+void setupNotification(NimBLERemoteService* service) {
+    notifyChar = service->getCharacteristic("0000ff01-0000-1000-8000-00805f9b34fb");
+    if (notifyChar) {
+       bool subscribed = notifyChar->subscribe(true, notifyCallback);
+        if (subscribed) {
+            Serial.println("Subscribed to printer status notifications");
+         } else {
+            Serial.println("Failed to subscribe to printer notifications");
+         }
+    } else {
+        Serial.println("Failed to find notify characteristic");
+    }
+}
 
 void startScan() {
    NimBLEDevice::init("ESP32_C3_Labeler");
@@ -60,6 +92,7 @@ void connectToPrinter() {
                   } else {
                      Serial.println("Failed to find characteristic ff02");
                   }
+                  setupNotification(pService);
                   // BLERemoteCharacteristic* pStatusChar = pService->getCharacteristic("ff01");
                   // if (pStatusChar && pStatusChar->canNotify()) {
                   //    // 2. Subscribe to it. This tells the printer "I am an active app"
@@ -1021,6 +1054,8 @@ void setup() {
    startScan();
 }
 
+unsigned long lastPing = 0;
+
 void loop() {
    delay(888);
    counter++;
@@ -1033,10 +1068,19 @@ void loop() {
          // printStripes();
          // printPolskafanStripes2();
          // printPolskafanSync();
-         testPrint();
+         // testPrint();
+      }
+      // if (millis() - lastPing > 60000) { // 10 minutes
+      if (millis() - lastPing > 30000) { // 10 minutes
+         Serial.println(">>> Sending keep-alive ping to printer...");
+         uint8_t ping[] = {0x1f, 0x11, 0x07};
+         pRemoteChar->writeValue(ping, sizeof(ping), false);
+         lastPing = millis();
       }
    } else {
       Serial.println("Not connected to printer yet, trying again...");
-      connectToPrinter();
+      if (counter > 5) {
+         connectToPrinter();
+      }
    }
 }
