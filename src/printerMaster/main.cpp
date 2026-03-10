@@ -2,6 +2,8 @@
 #include <Adafruit_GFX.h>
 #include <FS.h>
 #include <LittleFS.h>
+
+#include <U8g2_for_Adafruit_GFX.h>
 #include "qrcode.h"
 
 NimBLEClient* pClient;
@@ -311,6 +313,85 @@ void generateVerticalStripes(uint8_t* img, int width, int height) {
     }
 }
 
+// ===== Canvas setup =====
+// #define LABEL_W 96
+// #define LABEL_H 240
+#define LABEL_W 240
+#define LABEL_H 96
+uint8_t canvas[LABEL_W * LABEL_H / 8]; // 1-bit per pixel
+// Adafruit_GFX canvasGFX(LABEL_W, LABEL_H); // dummy GFX wrapper for U8g2
+U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
+
+// Dummy Adafruit_GFX wrapper
+class MyCanvas : public Adafruit_GFX {
+public:
+  MyCanvas() : Adafruit_GFX(LABEL_W, LABEL_H) {}
+  void drawPixel(int16_t x, int16_t y, uint16_t color) override {
+    if (x < 0 || x >= LABEL_W || y < 0 || y >= LABEL_H) return;
+    uint16_t byteIndex = x + y / 8 * LABEL_W;
+    uint8_t bit = 1 << (y & 7);
+    if (color) canvas[byteIndex] |= bit;
+    else canvas[byteIndex] &= ~bit;
+  }
+};
+MyCanvas myCanvas;
+
+// ===== Helper functions =====
+
+// Draw QR code at (x, y) with given module size
+void drawQRCode(int x0, int y0, const char *text, int moduleSize = 2) {
+  QRCode qrcode;
+  uint8_t qrcodeData[qrcode_getBufferSize(3)]; // version 3, ECC_LOW
+  qrcode_initText(&qrcode, qrcodeData, 3, ECC_LOW, text);
+
+  for (uint8_t y = 0; y < qrcode.size; y++) {
+    for (uint8_t x = 0; x < qrcode.size; x++) {
+      if (qrcode_getModule(&qrcode, x, y)) {
+        for (int mx = 0; mx < moduleSize; mx++)
+          for (int my = 0; my < moduleSize; my++)
+            myCanvas.drawPixel(x0 + x * moduleSize + mx, y0 + y * moduleSize + my, 1);
+      }
+    }
+  }
+}
+
+// // Draw Code128 barcode at (x, y)
+// void drawBarcode(int x0, int y0, const char *text, int barHeight = 40) {
+//   Code128 barcode;
+//   barcode.encode(text);
+
+//   int xpos = x0;
+//   for (int i = 0; i < barcode.length(); i++) {
+//     if (barcode.get(i)) {
+//       for (int h = 0; h < barHeight; h++)
+//         myCanvas.drawPixel(xpos, y0 + h, 1);
+//     }
+//     xpos++;
+//   }
+// }
+
+void rotate90CW(const uint8_t *src, uint8_t *dst, int w, int h) {
+  memset(dst, 0, w*h/8); // clear destination
+
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      // read pixel from src
+      int byteIndex = x + (y / 8) * w;
+      int bit = 1 << (y & 7);
+      bool pixelOn = src[byteIndex] & bit;
+
+      if (pixelOn) {
+        // write to dst rotated
+        int newX = y;
+        int newY = w - 1 - x;
+        int dstByte = newX + (newY / 8) * h;
+        int dstBit = 1 << (newY & 7);
+        dst[dstByte] |= dstBit;
+      }
+    }
+  }
+}
+
 const int WIDTH = 96;
 const int HEIGHT = 240;
 
@@ -325,6 +406,71 @@ void testPrint() {
     printRasterPhomemo(img, WIDTH, HEIGHT);
     free(img);
 }
+
+void testSuperPrint() {
+      memset(canvas, 0, sizeof(canvas));
+
+      u8g2Fonts.begin(myCanvas); // link U8g2 fonts to our canvas
+      u8g2Fonts.setFont(u8g2_font_unifont_t_cyrillic);
+
+      // Draw Cyrillic text
+      u8g2Fonts.drawUTF8(0, 20, "Привіт, світ!");
+
+      // Draw QR code
+      // drawQRCode(0, 50, "https://example.com");
+
+      // Draw barcode
+      // drawBarcode(0, 150, "1234567890", 50);
+
+      uint8_t rotatedCanvas[LABEL_W * LABEL_H / 8]; // same size, just rotated
+      rotate90CW(canvas, rotatedCanvas, LABEL_H, LABEL_W);
+
+      printRasterPhomemo(rotatedCanvas, LABEL_W, LABEL_H);
+}
+
+// void sendRotatedToPrinter(uint16_t w, uint16_t h, uint8_t* sourceBuffer) {
+//     // New dimensions for the printer
+//     uint16_t newW = h; 
+//     uint16_t newH = w;
+    
+//     // Calculate bytes per row for the NEW (rotated) image
+//     uint16_t newBytesPerRow = (newW + 7) / 8;
+//     uint8_t* rotatedBuffer = (uint8_t*)calloc(newBytesPerRow * newH, 1);
+
+//     if (rotatedBuffer == NULL) return; // Out of memory check
+
+//     for (uint16_t y = 0; y < h; y++) {
+//         for (uint16_t x = 0; x < w; x++) {
+//             // Get pixel from U8g2 buffer
+//             // U8g2 uses a specific tile-based or linear mapping depending on constructor
+//             // u8g2.getBufferPtr() is generally linear for U8G2_BITMAP
+//             bool pixel = u8g2.getPointer(x, y); // Helper to check pixel state
+
+//             if (pixel) {
+//                 // New coordinates for 90-degree rotation
+//                 uint16_t newX = (h - 1 - y);
+//                 uint16_t newY = x;
+
+//                 // Set bit in the rotated buffer
+//                 rotatedBuffer[newY * newBytesPerRow + (newX / 8)] |= (0x80 >> (newX % 8));
+//             }
+//         }
+//     }
+
+//     // --- PRINTER SENDING LOGIC ---
+//     // Now send 'rotatedBuffer' to your printer using its bitmap command
+//     // Example: myPrinter.printBitmap(newW, newH, rotatedBuffer);
+
+//     printRasterPhomemo(rotatedBuffer, LABEL_W, LABEL_H);
+
+//     free(rotatedBuffer); // Clean up memory!
+// }
+
+// U8G2_FOR_ADAFRUIT_GFX u8g2(WIDTH, HEIGHT, U8G2_R1);
+
+// void testSimplePrint() {
+  
+// }
 
 void setup() {
    Serial.begin(115200);
@@ -350,7 +496,8 @@ void loop() {
          // printStripes();
          // printPolskafanStripes2();
          // printPolskafanSync();
-         testPrint();
+         // testPrint();
+         testSuperPrint();
       }
       // if (millis() - lastPing > 60000) { // 10 minutes
       if (millis() - lastPing > 30000) { // 10 minutes
