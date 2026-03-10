@@ -173,6 +173,7 @@ void printLabel3(const char* text) {
 
 void printRasterPhomemo(uint8_t* img, int width, int height) {
     if (!pRemoteChar) return;
+    Serial.println(">>> Starting raster print...");
 
     const int widthBytes = width / 8;
    //  const int STRIPE_HEIGHT = 255;   // safe size for Phomemo
@@ -339,21 +340,21 @@ MyCanvas myCanvas;
 // ===== Helper functions =====
 
 // Draw QR code at (x, y) with given module size
-void drawQRCode(int x0, int y0, const char *text, int moduleSize = 2) {
-  QRCode qrcode;
-  uint8_t qrcodeData[qrcode_getBufferSize(3)]; // version 3, ECC_LOW
-  qrcode_initText(&qrcode, qrcodeData, 3, ECC_LOW, text);
+// void drawQRCode(int x0, int y0, const char *text, int moduleSize = 2) {
+//   QRCode qrcode;
+//   uint8_t qrcodeData[qrcode_getBufferSize(3)]; // version 3, ECC_LOW
+//   qrcode_initText(&qrcode, qrcodeData, 3, ECC_LOW, text);
 
-  for (uint8_t y = 0; y < qrcode.size; y++) {
-    for (uint8_t x = 0; x < qrcode.size; x++) {
-      if (qrcode_getModule(&qrcode, x, y)) {
-        for (int mx = 0; mx < moduleSize; mx++)
-          for (int my = 0; my < moduleSize; my++)
-            myCanvas.drawPixel(x0 + x * moduleSize + mx, y0 + y * moduleSize + my, 1);
-      }
-    }
-  }
-}
+//   for (uint8_t y = 0; y < qrcode.size; y++) {
+//     for (uint8_t x = 0; x < qrcode.size; x++) {
+//       if (qrcode_getModule(&qrcode, x, y)) {
+//         for (int mx = 0; mx < moduleSize; mx++)
+//           for (int my = 0; my < moduleSize; my++)
+//             myCanvas.drawPixel(x0 + x * moduleSize + mx, y0 + y * moduleSize + my, 1);
+//       }
+//     }
+//   }
+// }
 
 // // Draw Code128 barcode at (x, y)
 // void drawBarcode(int x0, int y0, const char *text, int barHeight = 40) {
@@ -472,6 +473,59 @@ void testSuperPrint() {
   
 // }
 
+GFXcanvas1 initCanvas(int width, int height) {
+   GFXcanvas1 canvas(width, height);
+
+   canvas.fillScreen(0);
+   canvas.setRotation(1);
+   return canvas;
+}
+
+void drawText(GFXcanvas1& canvas, int x, int y, const char* text, int size) {
+   canvas.setCursor(x, y);
+   canvas.setTextColor(1);
+   canvas.setTextSize(size);
+   canvas.print(text);
+}
+
+void drawQR(GFXcanvas1& canvas, int offX, int offY, const char* text, int size = 3, int ECC = 2, int cellSize = 2) {
+   QRCode qrcode;
+   uint8_t qrcodeData[qrcode_getBufferSize(size)];
+   qrcode_initText(&qrcode, qrcodeData, size, ECC, text);
+
+   for (uint8_t y = 0; y < qrcode.size; y++) {
+      for (uint8_t x = 0; x < qrcode.size; x++) {
+         if (qrcode_getModule(&qrcode, x, y)) {
+         for (int mx = 0; mx < cellSize; mx++)
+            for (int my = 0; my < cellSize; my++)
+               canvas.drawPixel(offX + x * cellSize + mx, offY + y * cellSize + my, 1);
+         }
+      }
+   }
+}
+
+void drawTestImage(GFXcanvas1& canvas) {
+   drawText(canvas, 111, 20, "Test Image", 2);
+   drawText(canvas, 111, 50, "1234567890", 3);
+   drawQR(canvas, 13, 7, "1234567890", 3, ECC_MEDIUM, 3);
+}
+
+void testGenerablePrint() {
+   const int WIDTH = 96;
+   const int HEIGHT = 320;
+   const int widthBytes = WIDTH / 8;
+   uint8_t* imgBuf = (uint8_t*)malloc(widthBytes * HEIGHT);
+
+   GFXcanvas1 canvas = initCanvas(WIDTH, HEIGHT);
+   drawTestImage(canvas);
+   Serial.println("   Finished drawing on canvas, sending to printer...");
+   uint8_t* buf = canvas.getBuffer();
+   memcpy(imgBuf, buf, widthBytes * HEIGHT);
+   printRasterPhomemo(imgBuf, WIDTH, HEIGHT);
+   free(imgBuf);
+   Serial.println("   Print command sent to printer, buffer freed.");
+}
+
 void setup() {
    Serial.begin(115200);
    delay(2002);
@@ -497,7 +551,8 @@ void loop() {
          // printPolskafanStripes2();
          // printPolskafanSync();
          // testPrint();
-         testSuperPrint();
+         // testSuperPrint();
+         testGenerablePrint();
       }
       // if (millis() - lastPing > 60000) { // 10 minutes
       if (millis() - lastPing > 30000) { // 10 minutes
