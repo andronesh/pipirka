@@ -5,6 +5,15 @@
 
 #include "qrcode.h"
 
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+#include <ArduinoJson.h>
+
+const char* ssid = "";
+const char* password = "";
+
+AsyncWebServer server(80);
+
 NimBLEClient* pClient;
 NimBLERemoteCharacteristic* pRemoteChar;
 NimBLERemoteCharacteristic* notifyChar;
@@ -196,6 +205,81 @@ void testGenerablePrint() {
    Serial.println("   Print command sent to printer, buffer freed.");
 }
 
+void connectToWifi() {
+   if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("Already connected to WiFi.");
+      return;
+   }
+   Serial.printf("Connecting to WiFi: %s\n", ssid);
+   WiFi.begin(ssid, password);
+   while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+   }
+   Serial.printf("\nWiFi connected! IP address: %s\n", WiFi.localIP().toString().c_str());
+}
+
+void startupServer() {
+   server.on("/label", HTTP_POST,
+      [](AsyncWebServerRequest *request){},
+      NULL,
+      [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+      {
+         Serial.println(">>> /label endpoint hit, processing data...");
+         StaticJsonDocument<2048> doc;
+         DeserializationError err = deserializeJson(doc, data);
+         if (err) {
+            request->send(400, "application/json", "{\"status\":\"json_error\"}");
+            return;
+         }
+
+         const int WIDTH = 96;
+         // const int HEIGHT = 240;
+         const int HEIGHT = 320;
+         const int widthBytes = WIDTH / 8;
+         uint8_t* imgBuf = (uint8_t*)malloc(widthBytes * HEIGHT);
+
+         GFXcanvas1 canvas = initCanvas(WIDTH, HEIGHT);
+
+         JsonArray elements = doc["elements"];
+
+         Serial.printf("   Elements to print: %d\n", elements.size());
+
+         for (JsonObject element : elements) {
+            const char* type = element["type"];
+
+            const int x = element["x"] | 0;
+            const int y = element["y"] | 0;
+            const char* value = element["value"];
+
+            if (strcmp(type, "text") == 0) {
+               Serial.printf("   Drawing text at (%d, %d), value: '%s'\n", x, y, value);
+               int size = element["size"] | 1;
+
+               drawText(canvas, x, y, value, size);
+            }
+            else if (strcmp(type, "qr") == 0) {
+               Serial.printf("   Drawing QR code at (%d, %d), value: '%s'\n", x, y, value);
+               int size = element["size"] | 3;
+               int ECC = element["ecc"] | 2;
+               int cellSize = element["cellSize"] | 2;
+
+               drawQR(canvas, x, y, value, size, ECC, cellSize);
+            }
+         }
+         Serial.println("   Finished drawing on canvas, sending to printer...");
+         uint8_t* buf = canvas.getBuffer();
+         memcpy(imgBuf, buf, widthBytes * HEIGHT);
+         printRasterPhomemo(imgBuf, WIDTH, HEIGHT);
+         free(imgBuf);
+         Serial.println("   Print command sent to printer, responding OK to client.");
+         request->send(200, "application/json", "{\"status\":\"ok\"}");
+      }
+   );
+
+   server.begin();
+}
+
 void setup() {
    Serial.begin(115200);
    delay(2002);
@@ -215,7 +299,7 @@ void loop() {
       Serial.printf("Should be ready to print, counter: %d\n", counter);
       if (counter == 8) {
          Serial.println("   sending label...");
-         testGenerablePrint();
+         startupServer();
       }
       if (millis() - lastPing > 30000) { // 60000 is 10 minutes
          Serial.println(">>> Sending keep-alive ping to printer...");
@@ -226,7 +310,23 @@ void loop() {
    } else {
       Serial.println("Not connected to printer yet, trying again...");
       if (counter > 5) {
+         connectToWifi();
          connectToPrinter();
       }
    }
 }
+
+
+/*
+POST /label
+Content-Type: application/json
+
+{
+  "elements": [
+    { "type":"text", "x":108, "y":20, "value":"BESHKET 13", "size":2 },
+    { "type":"text", "x":108, "y":50, "value":"12498", "size":4 },
+    { "type":"qr", "x":13, "y":7, "value":"http://example.com", "size": 3, "ECC": 2, "cellSize": 3 }
+  ]
+}
+
+*/
