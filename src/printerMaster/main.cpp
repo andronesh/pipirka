@@ -2,6 +2,7 @@
 #include <Adafruit_GFX.h>
 #include <FS.h>
 #include <LittleFS.h>
+#include "qrcode.h"
 
 NimBLEClient* pClient;
 NimBLERemoteCharacteristic* pRemoteChar;
@@ -239,6 +240,38 @@ void generateLabelImage(uint8_t* img, int width, int height, const char* text) {
    memcpy(img, buf, width * height / 8);
 }
 
+void generateLabelWithQrCode(uint8_t* img, int width, int height, const char* text, const char* qrCodeText) {
+   GFXcanvas1 canvas(width, height);
+
+   canvas.fillScreen(0);
+   canvas.setRotation(1);
+   canvas.setCursor(100, 22);
+   canvas.setTextColor(1);
+   canvas.setTextSize(2);
+   canvas.print(text);
+
+  QRCode qrcode;
+  uint8_t qrcodeData[qrcode_getBufferSize(3)]; // version 13, ECC_LOW?
+  qrcode_initText(&qrcode, qrcodeData, 3, ECC_MEDIUM, qrCodeText);
+
+  int xOffset = 10;
+  int yOffset = 5;
+  int moduleSize = 2;
+
+   for (uint8_t y = 0; y < qrcode.size; y++) {
+      for (uint8_t x = 0; x < qrcode.size; x++) {
+         if (qrcode_getModule(&qrcode, x, y)) {
+         for (int mx = 0; mx < moduleSize; mx++)
+            for (int my = 0; my < moduleSize; my++)
+               canvas.drawPixel(xOffset + x * moduleSize + mx, yOffset + y * moduleSize + my, 1);
+         }
+      }
+   }
+
+   uint8_t* buf = canvas.getBuffer();
+   memcpy(img, buf, width * height / 8);
+}
+
 void generateTestImage(uint8_t* img, int width, int height) {
     int widthBytes = width / 8;
 
@@ -278,7 +311,6 @@ void generateVerticalStripes(uint8_t* img, int width, int height) {
     }
 }
 
-
 const int WIDTH = 96;
 const int HEIGHT = 240;
 
@@ -289,7 +321,7 @@ void testPrint() {
     img = (uint8_t*)malloc(widthBytes * HEIGHT);
    //  generateTestImage(img, WIDTH, HEIGHT);
    //  generateVerticalStripes(img, WIDTH, HEIGHT);
-    generateLabelImage(img, WIDTH, HEIGHT, "ПетРарШа");
+    generateLabelWithQrCode(img, WIDTH, HEIGHT, "KABOOM 1881", "https://example.com");
     printRasterPhomemo(img, WIDTH, HEIGHT);
     free(img);
 }
