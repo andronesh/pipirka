@@ -225,6 +225,19 @@ void printRasterPhomemo(uint8_t* img, int width, int height) {
     Serial.println("PRINT DONE");
 }
 
+void generateLabelImage(uint8_t* img, int width, int height, const char* text) {
+   GFXcanvas1 canvas(width, height);
+
+   canvas.fillScreen(0);
+   canvas.setRotation(1);
+   canvas.setCursor(96, 33);
+   canvas.setTextColor(1);
+   canvas.setTextSize(3);
+   canvas.print(text);
+
+   uint8_t* buf = canvas.getBuffer();
+   memcpy(img, buf, width * height / 8);
+}
 
 void generateTestImage(uint8_t* img, int width, int height) {
     int widthBytes = width / 8;
@@ -267,15 +280,16 @@ void generateVerticalStripes(uint8_t* img, int width, int height) {
 
 
 const int WIDTH = 96;
-const int HEIGHT = 320;
+const int HEIGHT = 240;
 
 uint8_t* img;
 
 void testPrint() {
     int widthBytes = WIDTH / 8;
     img = (uint8_t*)malloc(widthBytes * HEIGHT);
-    generateTestImage(img, WIDTH, HEIGHT);
+   //  generateTestImage(img, WIDTH, HEIGHT);
    //  generateVerticalStripes(img, WIDTH, HEIGHT);
+    generateLabelImage(img, WIDTH, HEIGHT, "ПетРарШа");
     printRasterPhomemo(img, WIDTH, HEIGHT);
     free(img);
 }
@@ -304,7 +318,7 @@ void loop() {
          // printStripes();
          // printPolskafanStripes2();
          // printPolskafanSync();
-         // testPrint();
+         testPrint();
       }
       // if (millis() - lastPing > 60000) { // 10 minutes
       if (millis() - lastPing > 30000) { // 10 minutes
