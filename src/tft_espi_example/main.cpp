@@ -5,7 +5,8 @@ TFT_eSPI tft = TFT_eSPI();  // Invoke custom library
 
 void setup(void) {
   tft.init();
-
+  tft.setRotation(3);
+  
   tft.fillScreen(TFT_BLACK);
   tft.drawRect(0, 0, tft.width(), tft.height(), TFT_BLUE);
 
