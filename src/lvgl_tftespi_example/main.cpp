@@ -3,23 +3,15 @@
 #include "Button.h"
 
 TFT_eSPI tft = TFT_eSPI();
-
 static lv_color_t buf[240 * 20]; // partial buffer
 
-const int PIN_TFT_BL = 1;
-#define PWM_CH 0
-unsigned long previousMillis = 0;
-const long interval = 3000;
 int screenBrightness = 0;
-
 lv_obj_t *brightnessLabel;
 
 const gpio_num_t PIN_BTN_UP = GPIO_NUM_2;
 const gpio_num_t PIN_BTN_DOWN = GPIO_NUM_3;
 
 void applyBrightness() {
-    ledcWrite(PWM_CH, screenBrightness);
-
     // lv_label_set_text_fmt(brightnessLabel, "BL: %d", screenBrightness);
     lv_label_set_text(brightnessLabel,  std::to_string(screenBrightness).c_str());
     // lv_obj_invalidate(brightnessLabel);
@@ -64,7 +56,6 @@ void drawInitialUI() {
     lv_obj_set_style_text_font(brightnessLabel, &lv_font_montserrat_32, 0);
     lv_obj_set_style_text_color(brightnessLabel, lv_color_white(), 0);
 
-    // place BELOW first label
     lv_obj_align_to(brightnessLabel, greetingsLabel, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 }
 
@@ -77,25 +68,14 @@ void setup() {
     Button *btnDown = new Button(PIN_BTN_DOWN, false);
     btnDown->attachPressDownEventCb(&onKeyDownButtonPressDownCb, NULL);
 
-
     tft.init();
     tft.invertDisplay(false);
     tft.setRotation(1);
 
-    ledcSetup(PWM_CH, 5000, 8);   // channel, freq, resolution
-    ledcAttachPin(PIN_TFT_BL, PWM_CH);
-
-    ledcWrite(PWM_CH, screenBrightness); // max brightness
-
     lv_init();
 
-    // Create display
     lv_display_t *disp = lv_display_create(240, 240);
-
-    // Set buffers (NEW API)
     lv_display_set_buffers(disp, buf, NULL, sizeof(buf), LV_DISPLAY_RENDER_MODE_PARTIAL);
-
-    // Set flush callback
     lv_display_set_flush_cb(disp, my_disp_flush);
 
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), LV_PART_MAIN);
