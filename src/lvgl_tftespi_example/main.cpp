@@ -5,31 +5,29 @@
 TFT_eSPI tft = TFT_eSPI();
 static lv_color_t buf[240 * 20]; // partial buffer
 
-int screenBrightness = 0;
-lv_obj_t *brightnessLabel;
+int counter = 0;
+lv_obj_t *counterLabel;
 
 const gpio_num_t PIN_BTN_UP = GPIO_NUM_2;
 const gpio_num_t PIN_BTN_DOWN = GPIO_NUM_3;
 
-void applyBrightness() {
-    // lv_label_set_text_fmt(brightnessLabel, "BL: %d", screenBrightness);
-    lv_label_set_text(brightnessLabel,  std::to_string(screenBrightness).c_str());
-    // lv_obj_invalidate(brightnessLabel);
-    Serial.printf("--- brightness: %d\n", screenBrightness);
+void updateCounterLabel() {
+    // lv_label_set_text_fmt(counterLabel, "Count: %d", counter);
+    lv_label_set_text(counterLabel, std::to_string(counter).c_str());
+    // lv_obj_invalidate(counterLabel);
+    Serial.printf("--- counter should be %d\n", counter);
 }
 
 static void onUpButtonPressDownCb(void *button_handle, void *usr_data) {
     Serial.println("--- press down UP button");
-    screenBrightness += 15;
-    if (screenBrightness > 255) screenBrightness = 255;
-    applyBrightness();
+    counter += 15;
+    updateCounterLabel();
 }
 
 static void onKeyDownButtonPressDownCb(void *button_handle, void *usr_data) {
     Serial.println("--- press down DOWN button");
-    screenBrightness -= 15;
-    if (screenBrightness < 0) screenBrightness = 0;
-    applyBrightness();
+    counter -= 15;
+    updateCounterLabel();
 }
 
 void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
@@ -51,12 +49,12 @@ void drawInitialUI() {
     lv_obj_set_style_text_color(greetingsLabel, lv_color_white(), 0);
     lv_obj_center(greetingsLabel);
 
-    brightnessLabel = lv_label_create(lv_screen_active());
-    lv_label_set_text(brightnessLabel,  std::to_string(screenBrightness).c_str());
-    lv_obj_set_style_text_font(brightnessLabel, &lv_font_montserrat_32, 0);
-    lv_obj_set_style_text_color(brightnessLabel, lv_color_white(), 0);
+    counterLabel = lv_label_create(lv_screen_active());
+    lv_label_set_text(counterLabel, std::to_string(counter).c_str());
+    lv_obj_set_style_text_font(counterLabel, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_color(counterLabel, lv_color_white(), 0);
 
-    lv_obj_align_to(brightnessLabel, greetingsLabel, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+    lv_obj_align_to(counterLabel, greetingsLabel, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 }
 
 void setup() {
@@ -70,7 +68,7 @@ void setup() {
 
     tft.init();
     tft.invertDisplay(false);
-    tft.setRotation(1);
+    tft.setRotation(3);
 
     lv_init();
 
