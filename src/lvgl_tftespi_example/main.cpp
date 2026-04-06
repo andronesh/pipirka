@@ -8,7 +8,7 @@ static lv_color_t buf[240 * 20]; // partial buffer
 int counter = 0;
 lv_obj_t *counterLabel;
 
-const gpio_num_t PIN_BTN_UP = GPIO_NUM_2;
+const gpio_num_t PIN_BTN_UP = GPIO_NUM_1;
 const gpio_num_t PIN_BTN_DOWN = GPIO_NUM_3;
 
 void updateCounterLabel() {
