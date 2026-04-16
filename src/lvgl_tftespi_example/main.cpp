@@ -30,6 +30,14 @@ static void onKeyDownButtonPressDownCb(void *button_handle, void *usr_data) {
     updateCounterLabel();
 }
 
+void initButtons() {
+    Button *btnUp = new Button(PIN_BTN_UP, false);
+    btnUp->attachPressDownEventCb(&onUpButtonPressDownCb, NULL);
+
+    Button *btnDown = new Button(PIN_BTN_DOWN, false);
+    btnDown->attachPressDownEventCb(&onKeyDownButtonPressDownCb, NULL);
+}
+
 void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
@@ -40,6 +48,21 @@ void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     tft.endWrite();
 
     lv_display_flush_ready(disp);
+}
+
+void initLvgl() {
+    tft.init();
+    tft.invertDisplay(true);
+    tft.setRotation(0);
+
+    lv_init();
+
+    lv_display_t *disp = lv_display_create(240, 240);
+    lv_display_set_buffers(disp, buf, NULL, sizeof(buf), LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_flush_cb(disp, my_disp_flush);
+
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(lv_screen_active(), LV_OPA_COVER, LV_PART_MAIN);
 }
 
 void drawInitialUI() {
@@ -60,25 +83,9 @@ void drawInitialUI() {
 void setup() {
     Serial.begin(115200);
 
-    Button *btnUp = new Button(PIN_BTN_UP, false);
-    btnUp->attachPressDownEventCb(&onUpButtonPressDownCb, NULL);
+    initButtons();
 
-    Button *btnDown = new Button(PIN_BTN_DOWN, false);
-    btnDown->attachPressDownEventCb(&onKeyDownButtonPressDownCb, NULL);
-
-    tft.init();
-    tft.invertDisplay(false);
-    tft.setRotation(3);
-
-    lv_init();
-
-    lv_display_t *disp = lv_display_create(240, 240);
-    lv_display_set_buffers(disp, buf, NULL, sizeof(buf), LV_DISPLAY_RENDER_MODE_PARTIAL);
-    lv_display_set_flush_cb(disp, my_disp_flush);
-
-    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(lv_screen_active(), LV_OPA_COVER, LV_PART_MAIN);
-
+    initLvgl();
     drawInitialUI();
 }
 
