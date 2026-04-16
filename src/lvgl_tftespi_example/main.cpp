@@ -12,9 +12,7 @@ const gpio_num_t PIN_BTN_UP = GPIO_NUM_1;
 const gpio_num_t PIN_BTN_DOWN = GPIO_NUM_3;
 
 void updateCounterLabel() {
-    // lv_label_set_text_fmt(counterLabel, "Count: %d", counter);
     lv_label_set_text(counterLabel, std::to_string(counter).c_str());
-    // lv_obj_invalidate(counterLabel);
     Serial.printf("--- counter should be %d\n", counter);
 }
 
@@ -50,6 +48,10 @@ void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     lv_display_flush_ready(disp);
 }
 
+static uint32_t my_tick_CB(void) {
+    return millis();
+}
+
 void initLvgl() {
     tft.init();
     tft.invertDisplay(true);
@@ -60,6 +62,7 @@ void initLvgl() {
     lv_display_t *disp = lv_display_create(240, 240);
     lv_display_set_buffers(disp, buf, NULL, sizeof(buf), LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(disp, my_disp_flush);
+    lv_tick_set_cb(my_tick_CB);
 
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(lv_screen_active(), LV_OPA_COVER, LV_PART_MAIN);
